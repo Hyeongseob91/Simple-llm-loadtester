@@ -123,7 +123,6 @@ def log_benchmark_event(
     logger = get_logger("api.benchmark")
 
     log_data = {
-        "event": event,
         "run_id": run_id,
     }
 
