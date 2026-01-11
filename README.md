@@ -371,22 +371,32 @@ Goodput: 87.0% (87/100 requests met SLO)
 
 | 영역 | 설명 |
 |------|------|
-| **Progress Bar** | 전체 진행률 (%) |
-| **Real-time Stats** | 현재 Concurrency, 요청 수, 경과 시간, 연결 상태 |
-| **Summary Cards** | 결과 대기 중 "-" 표시 (Skeleton UI) |
-| **Chart Placeholder** | 데이터 수집 대기 중 애니메이션 막대 표시 |
-| **Results Table** | Skeleton Row로 테이블 구조 미리 표시 |
+| **이중 진행률 바** | 전체 진행률 + 레벨별 진행률 (Concurrency 단위) |
+| **실시간 메트릭 카드** | Concurrency, 현재 Throughput, 평균 TTFT, 경과 시간 |
+| **실시간 시계열 차트** | X축: 시간, Y축: Throughput/TTFT - 최근 60개 포인트 |
+
+#### Running 상태에서만 표시
+
+- 이중 진행률 바 (전체 + 레벨)
+- 실시간 메트릭 카드 (현재 Throughput, 평균 TTFT)
+- 실시간 시계열 차트 (시간 기반)
+
+#### 완료 후에만 표시
+
+- Best 지표 카드 (Best Throughput, Best TTFT, Best Concurrency, Error Rate)
+- Throughput & Latency by Concurrency 차트
+- 상세 결과 테이블
 
 #### 실시간 업데이트
 
-- **WebSocket 연결**: "실시간" 표시 - 즉각적인 진행률 업데이트
-- **HTTP 폴링**: "폴링" 표시 - 3초 간격 자동 새로고침
+- **WebSocket 연결**: "● 실시간 연결" 표시 - 즉각적인 진행률 업데이트
+- **HTTP 폴링**: "○ 폴링 모드" 표시 - 3초 간격 자동 새로고침
 
 #### UX 특징
 
-- **Skeleton UI**: 데이터가 없어도 화면 구조를 미리 보여줘서 빈 화면 방지
-- **점진적 표시**: 각 Concurrency 레벨 완료 시 차트와 테이블에 데이터 추가
-- **상태 표시**: 우측 상단 "진행 중" 배지로 현재 상태 명확히 표시
+- **이중 진행률**: 전체 진행률과 현재 레벨 진행률을 동시에 표시하여 심리적 안정감 제공
+- **실시간 메트릭**: "지금 서버가 버티는가?" 즉각 확인 가능
+- **시계열 차트**: 시간에 따른 성능 추이를 실시간으로 모니터링
 
 ---
 

@@ -103,6 +103,20 @@ if think_end_tag in buffer:
 | 메트릭 계산 | `core/metrics.py` |
 | AI 분석 보고서 | `api/src/llm_loadtest_api/routers/benchmarks.py:analyze_result` |
 | 인프라 추천 | `core/recommend.py` |
+| 벤치마크 상세 페이지 | `web/src/app/benchmark/[id]/page.tsx` |
+| 실시간 진행률 훅 | `web/src/hooks/useBenchmarkProgress.ts` |
+
+### 벤치마크 페이지 UI 구조 (page.tsx)
+
+**Running 상태에서 표시:**
+- 이중 진행률 바 (전체 + 레벨별)
+- 실시간 메트릭 카드 (Concurrency, Throughput, TTFT, 경과시간)
+- 실시간 시계열 차트 (최근 60개 포인트)
+
+**완료 후에만 표시:**
+- Best 지표 카드들 (Best Throughput, TTFT, Concurrency)
+- Throughput & Latency by Concurrency 차트
+- 상세 결과 테이블
 
 ## 출처
 
