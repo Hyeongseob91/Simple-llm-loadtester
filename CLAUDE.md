@@ -393,5 +393,33 @@ pytest tests/ -v --cov=shared/core --cov-report=term-missing
 
 - `.claude/skills/memory-system/SKILL.md` - 메모리 시스템 상세
 - `.claude/skills/loadtest-system/SKILL.md` - 프로젝트 컨텍스트
-- `.claude/skills/clarify/SKILL.md` - 요구사항 명확화
+- `.claude/skills/digging/SKILL.md` - 요구사항 파고들기 (PRD 생성)
 - `.claude/agents/` - 전문 에이전트들
+
+---
+
+## Custom Skills
+
+### /digging - 요구사항 파고들기
+
+모호한 요구사항을 단계별 질문으로 파고들어 PRD로 변환합니다.
+
+**트리거:**
+```
+/digging [기능명]
+파고들어 [기능명]
+PRD 작성해줘
+```
+
+**워크플로우:**
+1. 원본 요청 캡처
+2. 기술 조사 (필요시 WebSearch)
+3. AskUserQuestion으로 3라운드 질문
+   - Round 1: 핵심 방향 (구현 위치, 방식)
+   - Round 2: 세부 결정 (범위, 옵션)
+   - Round 3: 예외/저장 (실패 처리, 출력)
+4. Before/After 요약
+5. PRD 작성
+6. 저장 위치 확인 (항상 질문)
+
+**상세:** `.claude/skills/digging/SKILL.md`
