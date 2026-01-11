@@ -133,6 +133,30 @@ async def get_run_result(
             raise HTTPException(status_code=500, detail="Benchmark failed")
         raise HTTPException(status_code=404, detail="Result not found")
 
+    # Add summary if not present
+    if "summary" not in result and "results" in result:
+        results = result["results"]
+        if results:
+            best_throughput = max(r["throughput_tokens_per_sec"] for r in results)
+            best_ttft = min(r["ttft"]["p50"] for r in results)
+            best_result = max(results, key=lambda r: r["throughput_tokens_per_sec"])
+            total_requests = sum(r["total_requests"] for r in results)
+            failed_requests = sum(r["failed_requests"] for r in results)
+
+            result["summary"] = {
+                "best_throughput": best_throughput,
+                "best_ttft_p50": best_ttft,
+                "best_concurrency": best_result["concurrency"],
+                "total_requests": total_requests,
+                "overall_error_rate": (failed_requests / total_requests * 100) if total_requests > 0 else 0,
+            }
+
+            # Add Goodput if available
+            goodput_results = [r["goodput"] for r in results if r.get("goodput")]
+            if goodput_results:
+                avg_goodput = sum(g["goodput_percent"] for g in goodput_results) / len(goodput_results)
+                result["summary"]["avg_goodput_percent"] = avg_goodput
+
     return result
 
 

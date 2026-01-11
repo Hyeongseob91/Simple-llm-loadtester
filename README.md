@@ -284,45 +284,142 @@ Goodput: 87.0% (87/100 requests met SLO)
 
 ## Web UI 가이드
 
-### 대시보드 (/)
+### UX 흐름 개요
 
-- **전체 개요**: 총 실행 수, 완료/진행중/실패 현황
-- **최근 벤치마크**: 최근 실행 목록
-- **빠른 액션**: New Benchmark, Compare Results 버튼
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  Dashboard  │────▶│    New      │────▶│   Running   │────▶│   Result    │
+│     (/)     │     │  Benchmark  │     │   (실시간)   │     │   (완료)    │
+└─────────────┘     └─────────────┘     └─────────────┘     └─────────────┘
+       │                                                            │
+       │                    ┌─────────────┐                         │
+       └───────────────────▶│   Compare   │◀────────────────────────┘
+                            │   Results   │
+                            └─────────────┘
+```
 
-### 새 벤치마크 (/benchmark/new)
+---
+
+### 1. 대시보드 (/)
+
+> 벤치마크 현황을 한눈에 파악하고 빠르게 액션을 취할 수 있는 메인 화면
+
+![Dashboard](images/llm_loadtest_dashboard.png)
+
+#### 화면 구성
+
+| 영역 | 설명 |
+|------|------|
+| **Quick Actions** | 우측 상단의 `New Benchmark`, `Compare Results` 버튼으로 빠른 진입 |
+| **Summary Cards** | Total Runs, Completed, Running, Failed 현황을 카드 형태로 표시 |
+| **Recent Runs** | 최근 벤치마크 목록 - 모델명, 서버, 상태, 생성일시 표시 |
+| **Sidebar** | Dashboard, New Benchmark, Recommend, History, Compare 메뉴 |
+| **Dark Mode** | 좌측 하단의 Moon/Sun 토글로 다크모드 전환 |
+
+#### 상태 배지
+
+- 🔵 **running**: 진행 중
+- 🟢 **completed**: 완료
+- 🔴 **failed**: 실패
+
+---
+
+### 2. 새 벤치마크 (/benchmark/new)
+
+> 테스트 설정을 구성하고 벤치마크를 시작하는 페이지
+
+![New Benchmark](images/llm_loadtest_new_benchmark.png)
+
+#### 화면 구성
+
+| 영역 | 설명 |
+|------|------|
+| **Presets** | Quick / Standard / Stress 프리셋 선택 시 자동으로 설정값 적용 |
+| **Selected Settings** | 선택된 프리셋의 설정값 미리보기 |
+| **Server Settings** | vLLM 서버 URL, 모델명, API Key 입력 |
+| **Load Parameters** | Concurrency, Prompts, Input/Output Length, Streaming 설정 |
+| **Goodput SLO** | TTFT, TPOT, E2E 임계값 설정 (선택사항) |
 
 #### 테스트 프리셋
 
 | 프리셋 | 동시성 | 프롬프트 | Input | Output | 용도 |
 |--------|--------|---------|-------|--------|------|
-| **Quick** | 1, 5, 10 | 50 | 128 | 64 | 빠른 검증 |
-| **Standard** | 1, 10, 50, 100 | 200 | 256 | 128 | 일반 테스트 |
-| **Stress** | 10, 50, 100, 200, 500 | 500 | 512 | 256 | 스트레스 테스트 |
+| **Quick** | 1, 5, 10 | 50 | 128 | 64 | 빠른 검증 (~1분) |
+| **Standard** | 1, 10, 50, 100 | 200 | 256 | 128 | 일반 테스트 (~5분) |
+| **Stress** | 10, 50, 100, 200, 500 | 500 | 512 | 256 | 스트레스 테스트 (~15분) |
 
-#### 설정 항목
+#### Goodput SLO 설명
 
-- **서버 설정**: Server URL, Model Name, API Key
-- **테스트 설정**: Concurrency, Number of Prompts, Input/Output Length, Streaming
-- **Goodput SLO**: TTFT, TPOT, E2E 임계값 (선택)
+| 메트릭 | 설명 | 권장값 |
+|--------|------|--------|
+| **TTFT** | 첫 토큰 응답 시간 - 사용자가 응답 시작을 체감하는 시간 | 500ms |
+| **TPOT** | 토큰당 출력 시간 - 각 글자가 생성되는 속도 | 100ms |
+| **E2E** | 전체 응답 시간 - 요청부터 응답 완료까지 총 소요 시간 | 10000ms |
 
-### 결과 조회 (/benchmark/[id])
+---
 
-- **실시간 진행률**: WebSocket으로 진행 상황 업데이트
-- **요약 카드**: Best Throughput, Best TTFT p50, Best Concurrency, Error Rate
-- **Goodput 표시**: SLO 만족 비율
+### 3. 벤치마크 실행 중 (/benchmark/[id])
 
-#### 차트
+> 테스트 진행 상황을 실시간으로 모니터링하는 화면
 
-1. **Throughput & Latency 듀얼 Y축 차트**
-   - 좌측 Y축: Throughput (tok/s)
-   - 우측 Y축: Latency (ms)
-   - **Brush**: 줌/팬 기능으로 범위 선택
+![Benchmark Running](images/llm_loadtest_benchmark_running.png)
 
-2. **Error Rate & Goodput 차트**
-   - 동시성별 에러율과 Goodput 비교
+#### 화면 구성
 
-### 인프라 추천 (/recommend)
+| 영역 | 설명 |
+|------|------|
+| **Progress Bar** | 전체 진행률 (%) |
+| **Real-time Stats** | 현재 Concurrency, 요청 수, 경과 시간, 연결 상태 |
+| **Summary Cards** | 결과 대기 중 "-" 표시 (Skeleton UI) |
+| **Chart Placeholder** | 데이터 수집 대기 중 애니메이션 막대 표시 |
+| **Results Table** | Skeleton Row로 테이블 구조 미리 표시 |
+
+#### 실시간 업데이트
+
+- **WebSocket 연결**: "실시간" 표시 - 즉각적인 진행률 업데이트
+- **HTTP 폴링**: "폴링" 표시 - 3초 간격 자동 새로고침
+
+#### UX 특징
+
+- **Skeleton UI**: 데이터가 없어도 화면 구조를 미리 보여줘서 빈 화면 방지
+- **점진적 표시**: 각 Concurrency 레벨 완료 시 차트와 테이블에 데이터 추가
+- **상태 표시**: 우측 상단 "진행 중" 배지로 현재 상태 명확히 표시
+
+---
+
+### 4. 벤치마크 결과 (/benchmark/[id])
+
+> 완료된 벤치마크의 상세 결과를 분석하는 화면
+
+![Benchmark Result](images/llm_loadtest_benchmark_result.png)
+
+#### 화면 구성
+
+| 영역 | 설명 |
+|------|------|
+| **Summary Cards** | Best Throughput, Best TTFT (p50), Best Concurrency, Error Rate |
+| **Goodput** | SLO 임계값을 만족하는 평균 요청 비율 (%) |
+| **Chart** | Throughput & Latency by Concurrency - 듀얼 Y축 라인 차트 |
+| **상세 결과** | Concurrency별 상세 메트릭 테이블 |
+
+#### 차트 해석
+
+| 라인 | 색상 | Y축 | 설명 |
+|------|------|-----|------|
+| **Throughput** | 파랑 | 좌측 | 동시성 증가에 따른 처리량 변화 |
+| **TTFT p50** | 초록 | 우측 | 50% 요청의 첫 토큰 응답 시간 |
+| **TTFT p99** | 주황 | 우측 | 99% 요청의 첫 토큰 응답 시간 |
+
+#### 결과 해석 가이드
+
+```
+Throughput ↑ & Latency 안정 → 서버 여유 있음
+Throughput ↓ & Latency ↑   → 서버 포화 상태 (병목 발생)
+```
+
+---
+
+### 5. 인프라 추천 (/recommend)
 
 > **"이 서버가 동시 500명을 버티는가? 버티려면 H100 몇 장이 필요한가?"**
 
@@ -339,7 +436,6 @@ Goodput: 87.0% (87/100 requests met SLO)
 - **현재 인프라 프로파일**: GPU 모델, 메모리, 최대 동시성, 처리량
 - **예상 성능**: 추천 인프라에서의 예상 Max Concurrency, Goodput, Throughput
 - **계산 근거**: 스케일링 공식 및 상세 reasoning
-- **차트**: 동시성별 Throughput/Goodput 시각화
 
 #### 알고리즘
 
@@ -347,23 +443,33 @@ Goodput: 87.0% (87/100 requests met SLO)
 필요 GPU 수 = ceil(목표 동시성 / SLO 만족 최대 동시성) × (1 + headroom)
 ```
 
-### 비교 (/compare)
+---
+
+### 6. 결과 비교 (/compare)
 
 - 최대 **5개** 벤치마크 선택 비교
 - **모델 비교 테이블**: 각 벤치마크의 핵심 메트릭
 - **동시성별 처리량 비교 차트**: 멀티 라인 그래프
 
-### 히스토리 (/history)
+---
+
+### 7. 히스토리 (/history)
 
 - 모든 벤치마크 목록
 - **상태 필터링**: Running (파랑), Completed (초록), Failed (빨강)
 - **액션**: View (상세보기), Delete (삭제)
 
-### 다크모드
+---
 
-- 사이드바 하단의 **Moon/Sun 토글 버튼**
-- 시스템 설정 자동 감지
-- 모든 컴포넌트 다크모드 지원
+### UI/UX 특징
+
+| 특징 | 설명 |
+|------|------|
+| **Skeleton UI** | 로딩 중에도 화면 구조를 미리 보여줘서 UX 개선 |
+| **실시간 업데이트** | WebSocket + HTTP 폴링 이중화로 안정적인 실시간 모니터링 |
+| **반응형 디자인** | 모바일부터 데스크톱까지 반응형 레이아웃 |
+| **다크모드** | 시스템 설정 자동 감지 + 수동 토글 지원 |
+| **한국어 지원** | 주요 UI 요소 한국어 라벨 제공 |
 
 ---
 

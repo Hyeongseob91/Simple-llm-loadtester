@@ -17,13 +17,30 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-          Dashboard
-        </h1>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">
-          LLM server load testing overview
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            Dashboard
+          </h1>
+          <p className="mt-2 text-gray-600 dark:text-gray-400">
+            LLM server load testing overview
+          </p>
+        </div>
+        {/* Quick Actions - 헤더 옆에 배치 */}
+        <div className="flex gap-3">
+          <Link
+            href="/benchmark/new"
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+          >
+            New Benchmark
+          </Link>
+          <Link
+            href="/compare"
+            className="px-4 py-2 bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors font-medium"
+          >
+            Compare Results
+          </Link>
+        </div>
       </div>
 
       {/* Quick Stats */}
@@ -143,26 +160,6 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* Quick Actions */}
-      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          Quick Actions
-        </h2>
-        <div className="flex gap-4">
-          <Link
-            href="/benchmark/new"
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-          >
-            New Benchmark
-          </Link>
-          <Link
-            href="/compare"
-            className="px-4 py-2 bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors font-medium"
-          >
-            Compare Results
-          </Link>
-        </div>
-      </div>
     </div>
   );
 }

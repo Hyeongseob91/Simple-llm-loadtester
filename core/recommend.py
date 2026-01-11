@@ -412,7 +412,8 @@ class InfraRecommender:
         )
 
         # Scaling explanation
-        scale_factor = workload.peak_concurrency / profile.max_concurrency_at_slo
+        max_at_slo = profile.max_concurrency_at_slo if profile.max_concurrency_at_slo > 0 else 1
+        scale_factor = workload.peak_concurrency / max_at_slo
         lines.append(f"스케일링 비율: {scale_factor:.2f}배 필요.")
 
         # Headroom explanation

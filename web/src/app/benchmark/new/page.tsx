@@ -13,28 +13,28 @@ const PRESETS = {
     num_prompts: 50,
     input_len: 128,
     output_len: 64,
-    description: "Quick test - Fast validation",
+    description: "Fast validation test",
   },
   standard: {
     concurrency: [1, 10, 50, 100],
     num_prompts: 200,
     input_len: 256,
     output_len: 128,
-    description: "Standard test - Balanced benchmark",
+    description: "Balanced performance test",
   },
   stress: {
     concurrency: [10, 50, 100, 200, 500],
     num_prompts: 500,
     input_len: 512,
     output_len: 256,
-    description: "Stress test - Heavy load testing",
+    description: "High load stress test",
   },
 };
 
 export default function NewBenchmarkPage() {
   const router = useRouter();
   const [config, setConfig] = useState<Partial<BenchmarkConfig>>({
-    server_url: "http://localhost:8000",
+    server_url: "http://host.docker.internal:8000",
     model: "",
     adapter: "openai",
     concurrency: [1, 10, 50],
@@ -47,7 +47,7 @@ export default function NewBenchmarkPage() {
   });
 
   const [goodputEnabled, setGoodputEnabled] = useState(false);
-  const [goodput, setGoodput] = useState({ ttft: 500, tpot: 50, e2e: 3000 });
+  const [goodput, setGoodput] = useState({ ttft: 500, tpot: 100, e2e: 10000 });
   const [selectedPreset, setSelectedPreset] = useState<PresetType | null>(null);
 
   const applyPreset = (preset: PresetType) => {
@@ -98,216 +98,258 @@ export default function NewBenchmarkPage() {
   };
 
   return (
-    <div className="max-w-3xl">
-      <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-6">
-        New Benchmark
-      </h1>
+    <div className="w-full">
+      {/* Header with buttons */}
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+          New Benchmark
+        </h1>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => router.back()}
+            className="px-4 py-2 bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 text-sm font-medium"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={mutation.isPending || !config.model}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+          >
+            {mutation.isPending ? "Starting..." : "Start Benchmark"}
+          </button>
+        </div>
+      </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Test Presets */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            Quick Presets
+      {mutation.error && (
+        <p className="text-red-500 text-sm mb-3">
+          Error: {(mutation.error as Error).message}
+        </p>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Section Header: Test Configuration */}
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Test Configuration
           </h2>
-          <div className="grid grid-cols-3 gap-4">
-            {(Object.keys(PRESETS) as PresetType[]).map((preset) => (
-              <button
-                key={preset}
-                type="button"
-                onClick={() => applyPreset(preset)}
-                className={`p-4 rounded-lg border-2 transition-all ${
-                  selectedPreset === preset
-                    ? "border-blue-500 bg-blue-50 dark:bg-blue-900/30"
-                    : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
-                }`}
-              >
-                <div className="font-semibold text-gray-900 dark:text-white capitalize mb-1">
-                  {preset}
+          <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700"></div>
+        </div>
+
+        {/* Main Grid: Presets | Server + Load Parameters */}
+        <div className="grid grid-cols-3 gap-4">
+          {/* Presets Panel */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 flex flex-col">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
+              Presets
+            </h3>
+            <div className="flex flex-col gap-2 mb-4">
+              {(Object.keys(PRESETS) as PresetType[]).map((preset) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => applyPreset(preset)}
+                  className={`px-3 py-2 rounded-lg text-sm font-medium transition-all text-left ${
+                    selectedPreset === preset
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                  }`}
+                >
+                  {preset.charAt(0).toUpperCase() + preset.slice(1)}
+                  <span className={`block text-xs mt-0.5 ${
+                    selectedPreset === preset ? "text-blue-100" : "text-gray-500"
+                  }`}>
+                    {PRESETS[preset].description}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {/* Preset Preview */}
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-3 flex-1">
+              <h4 className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
+                {selectedPreset ? "Selected Settings" : "Current Settings"}
+              </h4>
+              <div className="space-y-1.5 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-gray-500 dark:text-gray-400">Concurrency</span>
+                  <span className="font-mono text-gray-900 dark:text-white">
+                    {config.concurrency?.join(", ")}
+                  </span>
                 </div>
-                <div className="text-xs text-gray-500 dark:text-gray-400">
-                  {PRESETS[preset].description}
+                <div className="flex justify-between">
+                  <span className="text-gray-500 dark:text-gray-400">Prompts</span>
+                  <span className="font-mono text-gray-900 dark:text-white">
+                    {config.num_prompts}
+                  </span>
                 </div>
-                <div className="mt-2 text-xs text-gray-600 dark:text-gray-400">
-                  <div>Concurrency: {PRESETS[preset].concurrency.join(", ")}</div>
-                  <div>Prompts: {PRESETS[preset].num_prompts}</div>
-                  <div>
-                    Tokens: {PRESETS[preset].input_len}/{PRESETS[preset].output_len}
-                  </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500 dark:text-gray-400">Input Length</span>
+                  <span className="font-mono text-gray-900 dark:text-white">
+                    {config.input_len} tokens
+                  </span>
                 </div>
-              </button>
-            ))}
+                <div className="flex justify-between">
+                  <span className="text-gray-500 dark:text-gray-400">Output Length</span>
+                  <span className="font-mono text-gray-900 dark:text-white">
+                    {config.output_len} tokens
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column: Server Settings + Load Parameters */}
+          <div className="col-span-2 flex flex-col gap-4">
+            {/* Server Settings */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
+                Server Settings
+              </h3>
+              <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                ML35: vLLM (Local Serving)
+              </div>
+              <div className="space-y-2">
+                <input
+                  type="text"
+                  value={config.server_url}
+                  onChange={(e) =>
+                    setConfig({ ...config, server_url: e.target.value })
+                  }
+                  className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  placeholder="http://host.docker.internal:8000"
+                  required
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    value={config.model}
+                    onChange={(e) => setConfig({ ...config, model: e.target.value })}
+                    className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    placeholder="Model (e.g., qwen3-14b)"
+                    required
+                  />
+                  <input
+                    type="password"
+                    value={config.api_key ?? ""}
+                    onChange={(e) =>
+                      setConfig({ ...config, api_key: e.target.value || undefined })
+                    }
+                    className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    placeholder="API Key (optional)"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Load Parameters */}
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 flex-1">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
+                Load Parameters
+              </h3>
+              <div className="grid grid-cols-4 gap-3 mb-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                    Concurrency
+                  </label>
+                  <input
+                    type="text"
+                    value={config.concurrency?.join(",")}
+                    onChange={(e) =>
+                      setConfig({
+                        ...config,
+                        concurrency: e.target.value.split(",").map(Number),
+                      })
+                    }
+                    className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    placeholder="1,10,50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                    Prompts
+                  </label>
+                  <input
+                    type="number"
+                    value={config.num_prompts}
+                    onChange={(e) =>
+                      setConfig({ ...config, num_prompts: Number(e.target.value) })
+                    }
+                    className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    placeholder="100"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                    Input Len
+                  </label>
+                  <input
+                    type="number"
+                    value={config.input_len}
+                    onChange={(e) =>
+                      setConfig({ ...config, input_len: Number(e.target.value) })
+                    }
+                    className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    placeholder="256"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                    Output Len
+                  </label>
+                  <input
+                    type="number"
+                    value={config.output_len}
+                    onChange={(e) =>
+                      setConfig({ ...config, output_len: Number(e.target.value) })
+                    }
+                    className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    placeholder="128"
+                  />
+                </div>
+              </div>
+
+              {/* Streaming Option */}
+              <label className="flex items-center gap-2 cursor-pointer mb-4">
+                <input
+                  type="checkbox"
+                  checked={config.stream}
+                  onChange={(e) =>
+                    setConfig({ ...config, stream: e.target.checked })
+                  }
+                  className="w-4 h-4 rounded border-gray-300"
+                />
+                <span className="text-sm text-gray-700 dark:text-gray-300">
+                  Streaming Mode
+                </span>
+              </label>
+
+              {/* Load Parameters 설명 */}
+              <div className="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                  <div><strong>Concurrency</strong>: 동시 요청 수 (쉼표로 구분)</div>
+                  <div><strong>Prompts</strong>: 각 레벨당 총 요청 수</div>
+                  <div><strong>Input Len</strong>: 입력 프롬프트 토큰 수</div>
+                  <div><strong>Output Len</strong>: 생성할 최대 토큰 수</div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Server Settings */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            Server Settings
+        {/* Goodput SLO Section */}
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Goodput SLO
           </h2>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Server URL
-              </label>
-              <input
-                type="text"
-                value={config.server_url}
-                onChange={(e) =>
-                  setConfig({ ...config, server_url: e.target.value })
-                }
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                placeholder="http://localhost:8000"
-                required
-              />
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                OpenAI-compatible API 서버 주소 (vLLM, SGLang, Ollama 등)
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Model Name
-              </label>
-              <input
-                type="text"
-                value={config.model}
-                onChange={(e) => setConfig({ ...config, model: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                placeholder="qwen3-14b"
-                required
-              />
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                vLLM --served-model-name 또는 모델 ID
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                API Key (optional)
-              </label>
-              <input
-                type="password"
-                value={config.api_key ?? ""}
-                onChange={(e) =>
-                  setConfig({ ...config, api_key: e.target.value || undefined })
-                }
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                placeholder="sk-..."
-              />
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                인증이 필요한 서버용 (vLLM 기본 설정은 불필요)
-              </p>
-            </div>
-          </div>
+          <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700"></div>
+          <span className="text-xs text-gray-500 dark:text-gray-400">선택사항</span>
         </div>
 
-        {/* Test Settings */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            Test Settings
-          </h2>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Concurrency Levels
-              </label>
-              <input
-                type="text"
-                value={config.concurrency?.join(",")}
-                onChange={(e) =>
-                  setConfig({
-                    ...config,
-                    concurrency: e.target.value.split(",").map(Number),
-                  })
-                }
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                placeholder="1,10,50,100"
-              />
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                동시 요청 수 (예: 1,5,10 → 각 레벨별로 테스트 실행)
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Number of Prompts
-              </label>
-              <input
-                type="number"
-                value={config.num_prompts}
-                onChange={(e) =>
-                  setConfig({ ...config, num_prompts: Number(e.target.value) })
-                }
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                각 동시성 레벨당 보낼 총 요청 수
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Input Length
-              </label>
-              <input
-                type="number"
-                value={config.input_len}
-                onChange={(e) =>
-                  setConfig({ ...config, input_len: Number(e.target.value) })
-                }
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                입력 프롬프트 토큰 수 (대략적)
-              </p>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Output Length
-              </label>
-              <input
-                type="number"
-                value={config.output_len}
-                onChange={(e) =>
-                  setConfig({ ...config, output_len: Number(e.target.value) })
-                }
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-              />
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                생성할 최대 출력 토큰 수 (max_tokens)
-              </p>
-            </div>
-          </div>
-
-          <div className="mt-4 flex items-center gap-4">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={config.stream}
-                onChange={(e) =>
-                  setConfig({ ...config, stream: e.target.checked })
-                }
-                className="w-4 h-4 rounded border-gray-300"
-              />
-              <span className="text-sm text-gray-700 dark:text-gray-300">
-                Enable Streaming
-              </span>
-            </label>
-            <span className="text-xs text-gray-500 dark:text-gray-400">
-              (체크 시 TTFT, ITL 측정 가능. 해제 시 전체 응답 한번에 수신)
-            </span>
-          </div>
-        </div>
-
-        {/* Goodput Settings */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Goodput SLO Thresholds
-            </h2>
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <div className="flex items-start gap-6 mb-4">
+            {/* Enable Toggle */}
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
@@ -315,20 +357,16 @@ export default function NewBenchmarkPage() {
                 onChange={(e) => setGoodputEnabled(e.target.checked)}
                 className="w-4 h-4 rounded border-gray-300"
               />
-              <span className="text-sm text-gray-700 dark:text-gray-300">
-                Enable
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                SLO 추적 활성화
               </span>
             </label>
-          </div>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
-            SLO 임계값을 모두 만족하는 요청의 비율(%)을 측정합니다. NVIDIA GenAI-Perf 기반 품질 지표.
-          </p>
 
-          {goodputEnabled && (
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  TTFT (ms)
+            {/* SLO Inputs */}
+            <div className={`flex items-center gap-4 ${!goodputEnabled && "opacity-50 pointer-events-none"}`}>
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                  TTFT
                 </label>
                 <input
                   type="number"
@@ -336,15 +374,13 @@ export default function NewBenchmarkPage() {
                   onChange={(e) =>
                     setGoodput({ ...goodput, ttft: Number(e.target.value) })
                   }
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  className="w-20 px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-center"
                 />
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Time To First Token - 첫 토큰까지 시간
-                </p>
+                <span className="text-xs text-gray-400">ms</span>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  TPOT (ms)
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                  TPOT
                 </label>
                 <input
                   type="number"
@@ -352,15 +388,13 @@ export default function NewBenchmarkPage() {
                   onChange={(e) =>
                     setGoodput({ ...goodput, tpot: Number(e.target.value) })
                   }
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  className="w-20 px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-center"
                 />
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Time Per Output Token - 토큰당 생성 시간
-                </p>
+                <span className="text-xs text-gray-400">ms</span>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  E2E (ms)
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                  E2E
                 </label>
                 <input
                   type="number"
@@ -368,39 +402,37 @@ export default function NewBenchmarkPage() {
                   onChange={(e) =>
                     setGoodput({ ...goodput, e2e: Number(e.target.value) })
                   }
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                  className="w-24 px-2 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-center"
                 />
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  End-to-End Latency - 전체 응답 시간
-                </p>
+                <span className="text-xs text-gray-400">ms</span>
               </div>
             </div>
-          )}
-        </div>
+          </div>
 
-        {/* Submit */}
-        <div className="flex gap-4">
-          <button
-            type="submit"
-            disabled={mutation.isPending}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-          >
-            {mutation.isPending ? "Starting..." : "Start Benchmark"}
-          </button>
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="px-6 py-2 bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 font-medium"
-          >
-            Cancel
-          </button>
+          {/* Help Text - 항상 표시 */}
+          <div className="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+            <div className="font-medium text-gray-700 dark:text-gray-300 mb-2">
+              SLO 임계값 설명 (모든 조건을 만족하는 요청만 "Good"으로 집계)
+            </div>
+            <div className="grid grid-cols-1 gap-1.5">
+              <div className="flex items-start gap-2">
+                <span className="font-semibold text-blue-600 dark:text-blue-400 min-w-[40px]">TTFT</span>
+                <span>첫 번째 토큰까지의 시간 (Time To First Token) - 사용자가 응답 시작을 체감하는 대기 시간</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="font-semibold text-green-600 dark:text-green-400 min-w-[40px]">TPOT</span>
+                <span>토큰당 출력 시간 (Time Per Output Token) - 각 글자가 생성되는 속도</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="font-semibold text-orange-600 dark:text-orange-400 min-w-[40px]">E2E</span>
+                <span>전체 응답 시간 (End-to-End) - 요청부터 응답 완료까지 총 소요 시간</span>
+              </div>
+            </div>
+            <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600 text-gray-400">
+              예: 통화 AI 상담 시스템에서 1초 내 응답 목표 시 TTFT=500ms, TPOT=100ms, E2E=10000ms 권장
+            </div>
+          </div>
         </div>
-
-        {mutation.error && (
-          <p className="text-red-500 text-sm">
-            Error: {(mutation.error as Error).message}
-          </p>
-        )}
       </form>
     </div>
   );
