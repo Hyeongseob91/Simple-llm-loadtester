@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { api, BenchmarkConfig } from "@/lib/api";
+import { api, BenchmarkConfig, VLLMConfig } from "@/lib/api";
 
 type PresetType = "quick" | "standard" | "stress";
 
@@ -49,6 +49,13 @@ export default function NewBenchmarkPage() {
   const [goodputEnabled, setGoodputEnabled] = useState(false);
   const [goodput, setGoodput] = useState({ ttft: 500, tpot: 100, e2e: 10000 });
   const [selectedPreset, setSelectedPreset] = useState<PresetType | null>(null);
+  const [vllmConfigEnabled, setVllmConfigEnabled] = useState(false);
+  const [vllmConfig, setVllmConfig] = useState<VLLMConfig>({
+    gpu_memory_utilization: 0.9,
+    tensor_parallel_size: 1,
+    max_num_seqs: 256,
+    quantization: "",
+  });
 
   const applyPreset = (preset: PresetType) => {
     const presetConfig = PRESETS[preset];
@@ -92,6 +99,25 @@ export default function NewBenchmarkPage() {
         tpot_ms: goodput.tpot,
         e2e_ms: goodput.e2e,
       };
+    }
+
+    if (vllmConfigEnabled) {
+      const vllmConfigToSend: VLLMConfig = {};
+      if (vllmConfig.gpu_memory_utilization !== undefined) {
+        vllmConfigToSend.gpu_memory_utilization = vllmConfig.gpu_memory_utilization;
+      }
+      if (vllmConfig.tensor_parallel_size !== undefined) {
+        vllmConfigToSend.tensor_parallel_size = vllmConfig.tensor_parallel_size;
+      }
+      if (vllmConfig.max_num_seqs !== undefined) {
+        vllmConfigToSend.max_num_seqs = vllmConfig.max_num_seqs;
+      }
+      if (vllmConfig.quantization) {
+        vllmConfigToSend.quantization = vllmConfig.quantization;
+      }
+      if (Object.keys(vllmConfigToSend).length > 0) {
+        finalConfig.vllm_config = vllmConfigToSend;
+      }
     }
 
     mutation.mutate(finalConfig);
@@ -334,6 +360,117 @@ export default function NewBenchmarkPage() {
                   <div><strong>Output Len</strong>: 생성할 최대 토큰 수</div>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* vLLM Configuration Section */}
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+            vLLM Configuration
+          </h2>
+          <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700"></div>
+          <span className="text-xs text-gray-500 dark:text-gray-400">선택사항 (분석 정확도 향상)</span>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <div className="flex items-start gap-6 mb-4">
+            {/* Enable Toggle */}
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={vllmConfigEnabled}
+                onChange={(e) => setVllmConfigEnabled(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300"
+              />
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                vLLM 설정 입력
+              </span>
+            </label>
+          </div>
+
+          {/* vLLM Config Inputs */}
+          <div className={`grid grid-cols-4 gap-4 mb-4 ${!vllmConfigEnabled && "opacity-50 pointer-events-none"}`}>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                GPU Memory Util
+              </label>
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                max="1"
+                value={vllmConfig.gpu_memory_utilization}
+                onChange={(e) =>
+                  setVllmConfig({ ...vllmConfig, gpu_memory_utilization: parseFloat(e.target.value) || 0.9 })
+                }
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                placeholder="0.9"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                Tensor Parallel
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={vllmConfig.tensor_parallel_size}
+                onChange={(e) =>
+                  setVllmConfig({ ...vllmConfig, tensor_parallel_size: parseInt(e.target.value) || 1 })
+                }
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                placeholder="1"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                Max Num Seqs
+              </label>
+              <input
+                type="number"
+                min="1"
+                value={vllmConfig.max_num_seqs}
+                onChange={(e) =>
+                  setVllmConfig({ ...vllmConfig, max_num_seqs: parseInt(e.target.value) || 256 })
+                }
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                placeholder="256"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                Quantization
+              </label>
+              <select
+                value={vllmConfig.quantization}
+                onChange={(e) =>
+                  setVllmConfig({ ...vllmConfig, quantization: e.target.value })
+                }
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+              >
+                <option value="">None</option>
+                <option value="awq">AWQ</option>
+                <option value="gptq">GPTQ</option>
+                <option value="fp8">FP8</option>
+                <option value="int8">INT8</option>
+              </select>
+            </div>
+          </div>
+
+          {/* Help Text */}
+          <div className="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+            <div className="font-medium text-gray-700 dark:text-gray-300 mb-2">
+              vLLM 설정 설명 (AI 분석 정확도 향상을 위해 실제 서버 설정값을 입력하세요)
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+              <div><strong>GPU Memory Util</strong>: GPU 메모리 할당 비율 (기본값 0.9 = 90%)</div>
+              <div><strong>Tensor Parallel</strong>: 텐서 병렬화에 사용하는 GPU 수</div>
+              <div><strong>Max Num Seqs</strong>: 최대 동시 처리 시퀀스 수 (기본값 256)</div>
+              <div><strong>Quantization</strong>: 모델 양자화 방식 (없으면 None)</div>
+            </div>
+            <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600 text-gray-400">
+              이 정보가 없으면 AI 분석에서 GPU 메트릭 해석 시 기본값을 가정합니다.
             </div>
           </div>
         </div>

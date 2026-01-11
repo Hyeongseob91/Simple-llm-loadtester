@@ -615,37 +615,23 @@ async def analyze_result(
 
 
 def _build_analysis_prompt(result: dict) -> str:
-    """Build analysis prompt from benchmark result."""
+    """Build analysis prompt from benchmark result with infrastructure context."""
     model = result.get("model", "Unknown")
     server_url = result.get("server_url", "Unknown")
     duration = result.get("duration_seconds", 0)
     results = result.get("results", [])
+    config = result.get("config", {})
 
-    # GPU 인프라 정보 수집
-    gpu_info_section = ""
-    if GPU_AVAILABLE and get_gpu_info:
-        try:
-            gpu_result = get_gpu_info()
-            if gpu_result.available and gpu_result.metrics:
-                gpu_lines = []
-                for gpu in gpu_result.metrics:
-                    gpu_lines.append(
-                        f"  - **GPU {gpu.gpu_index}**: {gpu.device_name} "
-                        f"({gpu.memory_total_gb:.1f}GB VRAM, "
-                        f"현재 {gpu.memory_used_gb:.1f}GB 사용 중)"
-                    )
-                gpu_list_str = "\n".join(gpu_lines)
-                gpu_info_section = f"""
-## 서버 인프라 (자동 감지)
-- **GPU 수**: {gpu_result.gpu_count}장
-{gpu_list_str}
+    # Get server infrastructure from saved result
+    server_infra = result.get("server_infra")
 
-> 위 인프라 환경을 고려하여 분석해주세요. 특히 GPU 메모리와 처리량 간의 관계를 분석하세요.
-"""
-        except Exception as e:
-            logger.warning(f"GPU 정보 수집 실패: {e}")
+    # Build infrastructure section
+    infra_section = _build_infra_section(server_infra)
 
-    # 테이블 데이터에서 직접 요약 통계 계산 (summary 필드가 없거나 0인 경우 대비)
+    # Build workload section from config
+    workload_section = _build_workload_section(config)
+
+    # Calculate summary statistics from results
     best_throughput = 0.0
     best_ttft_p50 = float('inf')
     best_concurrency = None
@@ -671,34 +657,41 @@ def _build_analysis_prompt(result: dict) -> str:
         if goodput and 'goodput_percent' in goodput:
             goodput_values.append(goodput['goodput_percent'])
 
-    # 계산된 값으로 요약
     overall_error_rate = (total_errors / total_requests * 100) if total_requests > 0 else 0
     avg_goodput = sum(goodput_values) / len(goodput_values) if goodput_values else None
     if best_ttft_p50 == float('inf'):
         best_ttft_p50 = 0
 
     # Build concurrency results table
-    results_table = "| Concurrency | Throughput (tok/s) | TTFT p50 (ms) | TTFT p99 (ms) | Error Rate (%) | Goodput (%) |\n"
-    results_table += "|-------------|-------------------|---------------|---------------|----------------|-------------|\n"
+    results_table = _build_results_table(results)
 
-    for r in results:
-        ttft = r.get("ttft") or {}
-        goodput = r.get("goodput") or {}
-        goodput_str = f"{goodput.get('goodput_percent', 0):.1f}" if goodput else "N/A"
-        results_table += f"| {r.get('concurrency', 0)} | {r.get('throughput_tokens_per_sec', 0):.1f} | {ttft.get('p50', 0):.1f} | {ttft.get('p99', 0):.1f} | {r.get('error_rate_percent', 0):.2f} | {goodput_str} |\n"
-
-    # 요약 문자열 생성
     goodput_summary = f"{avg_goodput:.1f}%" if avg_goodput is not None else "N/A"
     concurrency_summary = best_concurrency if best_concurrency else "N/A"
 
+    # Build GPU metrics note based on whether vllm_config was provided
+    vllm_config = server_infra.get("vllm_config", {}) if server_infra else {}
+    gpu_mem_util = vllm_config.get("gpu_memory_utilization") if vllm_config else None
+
+    if gpu_mem_util:
+        gpu_metrics_note = f"""**참고**: 사용자가 제공한 vLLM 설정에 따르면 `gpu_memory_utilization={gpu_mem_util}` 입니다.
+GPU 메모리의 {gpu_mem_util * 100:.0f}%만 vLLM에 할당되므로, GPU 메트릭 해석 시 이를 고려하세요.
+예: GPU 메모리 사용률 {gpu_mem_util * 100 * 0.9:.0f}%는 vLLM 할당분의 약 90%를 사용 중입니다."""
+    else:
+        gpu_metrics_note = """**주의**: GPU 메트릭은 시스템 전체 사용량입니다. vLLM 설정값이 제공되지 않았으므로 기본값(`gpu_memory_utilization=0.9`)을 가정합니다.
+GPU 메모리의 90%만 vLLM에 할당됩니다. 예를 들어 GPU 메모리 사용률 85%는 vLLM 할당분의 거의 전부를 사용 중일 수 있습니다."""
+
     prompt = f"""다음 LLM 서버 벤치마크 결과를 분석해주세요.
 
-## 테스트 환경
+{infra_section}
+
+{workload_section}
+
+## 테스트 요약
 - **모델**: {model}
 - **서버**: {server_url}
 - **테스트 시간**: {duration:.1f}초
-{gpu_info_section}
-## 성능 요약 (테이블 기반 계산)
+
+## 성능 요약
 - **최고 처리량**: {best_throughput:.1f} tok/s (동시성 {concurrency_summary}에서)
 - **최저 TTFT p50**: {best_ttft_p50:.1f} ms
 - **전체 에러율**: {overall_error_rate:.2f}%
@@ -707,35 +700,209 @@ def _build_analysis_prompt(result: dict) -> str:
 ## Concurrency별 상세 결과
 {results_table}
 
+---
+
 ## 분석 요청
-위 벤치마크 결과를 분석하여 **전문가 보고서**를 작성해주세요.
+
+위 벤치마크 결과와 **서버 인프라 환경을 고려하여** 전문가 보고서를 작성해주세요.
 
 **[용어 설명 규칙]**
 - 전문 용어는 처음 사용 시 괄호 안에 간단한 설명 추가
-- 예: "TTFT(첫 토큰 응답 시간, Time To First Token)"
-- 예: "Throughput(처리량, 초당 처리 토큰 수)"
-- 예: "Goodput(유효 처리량, SLA 기준을 충족하는 요청 비율)"
+- 예: "TTFT(첫 토큰 응답 시간)", "Throughput(처리량)", "Goodput(SLA 충족 비율)"
 
 **[분석 항목]**
 
-# 1. 성능 개요
-전반적인 서버 성능을 요약하세요.
+# 1. 환경 요약
+서버 인프라(GPU, CPU, 메모리)와 테스트 환경을 간략히 정리하세요.
 
-# 2. Concurrency 영향 분석
-동시성(동시 요청 수) 증가에 따른 성능 변화 패턴을 분석하세요. 표 데이터를 기반으로 구체적인 수치를 인용하세요.
+# 2. 성능 개요
+GPU 스펙 대비 성능을 평가하세요. 처리량과 응답 시간의 전반적인 수준을 분석하세요.
 
-# 3. 병목 지점 식별
-성능이 저하되기 시작하는 동시성 레벨과 그 원인을 추정하세요.
+# 3. Concurrency 영향 분석
+동시성 증가에 따른 성능 변화 패턴을 분석하세요. 표 데이터를 기반으로 구체적인 수치를 인용하세요.
 
-# 4. TTFT vs Throughput 트레이드오프
-응답 시간과 처리량 간의 관계를 분석하세요. 낮은 지연시간과 높은 처리량 사이의 균형점을 찾으세요.
+# 4. 병목 원인 분석 (증거 기반)
+성능 저하 지점을 식별하고, 데이터를 근거로 병목 원인을 분석하세요.
+
+{gpu_metrics_note}
+
+다음 형식을 따르세요:
+- **가설**: [성능 저하 원인 추정]
+- **증거**: [GPU 메트릭, 에러율, TTFT/처리량 변화 등 데이터 인용]
+- **검증**: [다른 가능한 원인 배제 또는 추가 확인 필요 사항]
 
 # 5. 권장 운영 동시성
-실제 서비스에서 권장하는 최적 동시성 레벨과 그 이유를 제시하세요.
+최적 동시성 레벨과 그 근거를 제시하세요. SLA(예: TTFT p99 < 500ms) 충족 여부를 고려하세요.
 
 # 6. 개선 제안
-성능 향상을 위한 구체적인 제안을 해주세요. 인프라, 모델, 설정 측면에서 실행 가능한 조치를 포함하세요.
+다음 측면에서 우선순위가 높은 개선안을 제시하세요:
+- **인프라**: GPU 추가, 메모리 최적화
+- **설정**: max_num_seqs, gpu_memory_utilization 조정
+- **모델**: 양자화, context length 최적화
+
+# 7. 모니터링 권장안
+운영 시 모니터링해야 할 주요 메트릭과 알람 임계값을 제안하세요.
 
 각 항목을 **마크다운 헤딩(#)으로 구분**하여 작성해주세요."""
 
     return prompt
+
+
+def _build_infra_section(server_infra: dict | None) -> str:
+    """Build infrastructure section for prompt."""
+    if not server_infra:
+        # Fallback: try to get current GPU info (legacy behavior)
+        if GPU_AVAILABLE and get_gpu_info:
+            try:
+                gpu_result = get_gpu_info()
+                if gpu_result.available and gpu_result.metrics:
+                    gpu_lines = []
+                    for gpu in gpu_result.metrics:
+                        gpu_lines.append(
+                            f"  - **GPU {gpu.gpu_index}**: {gpu.device_name} "
+                            f"({gpu.memory_total_gb:.1f}GB VRAM)"
+                        )
+                    return f"""## 1. 서버 인프라
+> (현재 시점 GPU 정보 - 벤치마크 시점과 다를 수 있음)
+
+### 1.1 GPU
+- **GPU 수**: {gpu_result.gpu_count}장
+{chr(10).join(gpu_lines)}"""
+            except Exception:
+                pass
+        return "## 1. 서버 인프라\n(인프라 정보 없음 - 일반적인 분석만 가능)"
+
+    lines = ["## 1. 서버 인프라"]
+
+    # GPU info
+    gpu = server_infra.get("gpu", {})
+    if gpu:
+        lines.append("\n### 1.1 GPU")
+        lines.append(f"- **모델**: {gpu.get('gpu_model', 'Unknown')}")
+        lines.append(f"- **개수**: {gpu.get('gpu_count', 'Unknown')}장")
+        lines.append(f"- **VRAM**: {gpu.get('gpu_memory_total_gb', 'Unknown')} GB/장")
+        if gpu.get("driver_version"):
+            lines.append(f"- **드라이버**: {gpu['driver_version']}")
+        if gpu.get("cuda_version"):
+            lines.append(f"- **CUDA**: {gpu['cuda_version']}")
+        if gpu.get("mig_enabled") is not None:
+            lines.append(f"- **MIG**: {'활성화' if gpu['mig_enabled'] else '비활성화'}")
+
+    # System info
+    system = server_infra.get("system", {})
+    if system:
+        lines.append("\n### 1.2 System")
+        lines.append(f"- **CPU**: {system.get('cpu_model', 'Unknown')}")
+        cores_physical = system.get('cpu_cores_physical', '?')
+        cores_logical = system.get('cpu_cores_logical', '?')
+        lines.append(f"- **코어**: {cores_physical} physical / {cores_logical} logical")
+        lines.append(f"- **RAM**: {system.get('ram_total_gb', 'Unknown')} GB")
+
+    # Serving engine
+    engine = server_infra.get("serving_engine", {})
+    if engine:
+        lines.append("\n### 1.3 Serving Engine")
+        lines.append(f"- **엔진**: {engine.get('engine_type', 'Unknown')}")
+        if engine.get("engine_version"):
+            lines.append(f"- **버전**: {engine['engine_version']}")
+        if engine.get("model_name"):
+            lines.append(f"- **모델**: {engine['model_name']}")
+        if engine.get("quantization"):
+            lines.append(f"- **양자화**: {engine['quantization']}")
+        if engine.get("max_num_seqs"):
+            lines.append(f"- **max_num_seqs**: {engine['max_num_seqs']}")
+        if engine.get("gpu_memory_utilization"):
+            lines.append(f"- **gpu_memory_utilization**: {engine['gpu_memory_utilization']}")
+        if engine.get("tensor_parallel_size"):
+            lines.append(f"- **tensor_parallel_size**: {engine['tensor_parallel_size']}")
+
+    # User-provided vLLM configuration
+    vllm_config = server_infra.get("vllm_config", {})
+    if vllm_config:
+        lines.append("\n### 1.4 vLLM 설정 (사용자 제공)")
+        if vllm_config.get("gpu_memory_utilization") is not None:
+            lines.append(f"- **gpu_memory_utilization**: {vllm_config['gpu_memory_utilization']}")
+        if vllm_config.get("tensor_parallel_size") is not None:
+            lines.append(f"- **tensor_parallel_size**: {vllm_config['tensor_parallel_size']}")
+        if vllm_config.get("max_num_seqs") is not None:
+            lines.append(f"- **max_num_seqs**: {vllm_config['max_num_seqs']}")
+        if vllm_config.get("quantization") is not None:
+            lines.append(f"- **quantization**: {vllm_config['quantization']}")
+
+    # GPU metrics during benchmark
+    gpu_metrics = server_infra.get("gpu_metrics_during_benchmark", [])
+    if gpu_metrics:
+        section_num = "1.5" if vllm_config else "1.4"
+        lines.append(f"\n### {section_num} 벤치마크 중 GPU 상태")
+
+        # Add note about GPU metrics interpretation
+        gpu_mem_util = vllm_config.get("gpu_memory_utilization") if vllm_config else None
+        if gpu_mem_util:
+            lines.append(f"> **참고**: vLLM이 GPU 메모리의 {gpu_mem_util * 100:.0f}%만 사용하도록 설정됨")
+            lines.append("> 아래 메트릭은 시스템 전체 사용량이며, vLLM 할당분 대비 계산이 필요합니다.")
+        else:
+            lines.append("> **주의**: 아래 GPU 메트릭은 시스템 전체 사용량입니다.")
+            lines.append("> vLLM의 `gpu_memory_utilization` 설정(기본값 0.9)으로 실제 할당 가능 메모리가 제한될 수 있습니다.")
+        lines.append("")
+
+        for m in gpu_metrics:
+            avg_mem = m.get('avg_memory_used_gb', 0)
+            peak_mem = m.get('peak_memory_used_gb', 0)
+            avg_util = m.get('avg_gpu_util_percent', 0)
+            peak_util = m.get('peak_gpu_util_percent', 0)
+            lines.append(
+                f"- **GPU {m.get('gpu_index', 0)}**: "
+                f"메모리 {avg_mem:.1f}GB (peak {peak_mem:.1f}GB), "
+                f"활용률 {avg_util:.0f}% (peak {peak_util:.0f}%)"
+            )
+
+    return "\n".join(lines)
+
+
+def _build_workload_section(config: dict) -> str:
+    """Build workload section for prompt."""
+    if not config:
+        return ""
+
+    lines = ["## 2. 실험 설계"]
+    lines.append("\n### 2.1 Workload")
+    lines.append(f"- **Input tokens**: {config.get('input_len', 'Unknown')}")
+    lines.append(f"- **Output tokens**: {config.get('output_len', 'Unknown')}")
+    lines.append(f"- **요청 수**: {config.get('num_prompts', 'Unknown')}/레벨")
+    concurrency = config.get('concurrency', [])
+    lines.append(f"- **동시성 레벨**: {concurrency}")
+    lines.append(f"- **스트리밍**: {'예' if config.get('stream', True) else '아니오'}")
+
+    # SLA if defined
+    thresholds = config.get("goodput_thresholds", {})
+    if thresholds:
+        lines.append("\n### 2.2 SLA 정의")
+        if thresholds.get("ttft_ms"):
+            lines.append(f"- **TTFT**: ≤ {thresholds['ttft_ms']}ms")
+        if thresholds.get("tpot_ms"):
+            lines.append(f"- **TPOT**: ≤ {thresholds['tpot_ms']}ms")
+        if thresholds.get("e2e_ms"):
+            lines.append(f"- **E2E**: ≤ {thresholds['e2e_ms']}ms")
+
+    return "\n".join(lines)
+
+
+def _build_results_table(results: list) -> str:
+    """Build markdown table of concurrency results."""
+    table = "| Concurrency | Throughput (tok/s) | TTFT p50 (ms) | TTFT p99 (ms) | Error Rate (%) | Goodput (%) |\n"
+    table += "|-------------|-------------------|---------------|---------------|----------------|-------------|\n"
+
+    for r in results:
+        ttft = r.get("ttft") or {}
+        goodput = r.get("goodput") or {}
+        goodput_str = f"{goodput.get('goodput_percent', 0):.1f}" if goodput else "N/A"
+        table += (
+            f"| {r.get('concurrency', 0)} "
+            f"| {r.get('throughput_tokens_per_sec', 0):.1f} "
+            f"| {ttft.get('p50', 0):.1f} "
+            f"| {ttft.get('p99', 0):.1f} "
+            f"| {r.get('error_rate_percent', 0):.2f} "
+            f"| {goodput_str} |\n"
+        )
+
+    return table

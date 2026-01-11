@@ -13,6 +13,9 @@ sys.path.insert(0, str(project_root))
 
 from shared.core.load_generator import LoadGenerator
 from shared.core.models import BenchmarkConfig, BenchmarkResult, GoodputThresholds
+from shared.core.gpu_monitor import GPUMonitor, get_gpu_static_info
+from shared.core.system_info import get_system_info
+from shared.core.serving_engine_info import get_vllm_engine_info
 from shared.adapters.base import AdapterFactory
 from shared.adapters.openai_compat import OpenAICompatibleAdapter  # Register adapter
 
@@ -64,6 +67,16 @@ class BenchmarkService:
             goodput_thresholds=goodput_thresholds,
         )
 
+        # Extract user-provided vLLM config (optional)
+        vllm_config = None
+        if request.vllm_config:
+            vllm_config = {
+                k: v for k, v in request.vllm_config.model_dump().items()
+                if v is not None
+            }
+            if not vllm_config:
+                vllm_config = None
+
         # Save to database
         self.db.create_run(
             run_id=run_id,
@@ -74,23 +87,38 @@ class BenchmarkService:
         )
 
         # Start background task
-        task = asyncio.create_task(self._run_benchmark(run_id, config))
+        task = asyncio.create_task(self._run_benchmark(run_id, config, vllm_config))
         self._running_tasks[run_id] = task
 
         return run_id
 
-    async def _run_benchmark(self, run_id: str, config: BenchmarkConfig) -> None:
+    async def _run_benchmark(
+        self,
+        run_id: str,
+        config: BenchmarkConfig,
+        vllm_config: Optional[dict] = None,
+    ) -> None:
         """Run benchmark in background.
 
         Args:
             run_id: Unique run identifier.
             config: Benchmark configuration.
+            vllm_config: User-provided vLLM configuration (optional).
         """
         manager = get_connection_manager()
+        gpu_monitor: Optional[GPUMonitor] = None
+        gpu_monitoring_active = False
 
         try:
             # Update status to running
             self.db.update_status(run_id, "running", started_at=datetime.now(timezone.utc))
+
+            # Capture server infrastructure info BEFORE benchmark starts
+            server_infra = await self._capture_server_infra(config.server_url)
+
+            # Start GPU monitoring in background
+            gpu_monitor = GPUMonitor(sample_interval=1.0)
+            gpu_monitoring_active = gpu_monitor.start()
 
             # Create adapter
             adapter = AdapterFactory.create(
@@ -151,9 +179,35 @@ class BenchmarkService:
 
             result = await generator.run(config, progress_callback)
 
-            # Save result with summary included
+            # Stop GPU monitoring and collect metrics
+            if gpu_monitoring_active and gpu_monitor:
+                gpu_result = gpu_monitor.stop()
+                gpu_monitoring_active = False
+                if server_infra and gpu_result.available and gpu_result.metrics:
+                    server_infra["gpu_metrics_during_benchmark"] = [
+                        {
+                            "gpu_index": m.gpu_index,
+                            "device_name": m.device_name,
+                            "avg_memory_used_gb": round(m.avg_memory_used_gb, 2),
+                            "peak_memory_used_gb": round(m.peak_memory_used_gb, 2),
+                            "avg_gpu_util_percent": round(m.avg_gpu_util_percent, 1),
+                            "peak_gpu_util_percent": round(m.peak_gpu_util_percent, 1),
+                            "avg_temperature_celsius": m.temperature_celsius,
+                            "peak_temperature_celsius": m.peak_temperature_celsius,
+                            "avg_power_draw_watts": m.power_draw_watts,
+                            "peak_power_draw_watts": m.peak_power_draw_watts,
+                        }
+                        for m in gpu_result.metrics
+                    ]
+
+            # Add user-provided vLLM config to server_infra
+            if vllm_config and server_infra:
+                server_infra["vllm_config"] = vllm_config
+
+            # Save result with summary and server_infra included
             result_dict = result.model_dump(mode="json")
             result_dict["summary"] = result.get_summary()
+            result_dict["server_infra"] = server_infra
             self.db.save_result(run_id, result_dict)
 
             # Send completed message via WebSocket
@@ -168,9 +222,60 @@ class BenchmarkService:
             print(f"[BenchmarkService] Run {run_id} failed: {e}")
 
         finally:
+            # Stop GPU monitoring if still running
+            if gpu_monitoring_active and gpu_monitor:
+                try:
+                    gpu_monitor.stop()
+                except Exception:
+                    pass
             # Clean up task reference
             if run_id in self._running_tasks:
                 del self._running_tasks[run_id]
+
+    async def _capture_server_infra(self, server_url: str) -> Optional[dict]:
+        """Capture server infrastructure information before benchmark.
+
+        Collects:
+        - System info (CPU, RAM) using psutil
+        - GPU static info (model, driver, CUDA version) using pynvml
+        - Serving engine info (vLLM config) from server endpoints
+
+        Args:
+            server_url: LLM server URL
+
+        Returns:
+            Dictionary with server infrastructure info, or None if collection failed.
+        """
+        infra: dict = {
+            "captured_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+        # Collect system info (CPU, RAM)
+        try:
+            system = get_system_info()
+            if system:
+                infra["system"] = system
+        except Exception as e:
+            print(f"[BenchmarkService] Failed to collect system info: {e}")
+
+        # Collect GPU static info (model, driver, CUDA)
+        try:
+            gpu = get_gpu_static_info()
+            if gpu:
+                infra["gpu"] = gpu
+        except Exception as e:
+            print(f"[BenchmarkService] Failed to collect GPU info: {e}")
+
+        # Collect serving engine info (vLLM config)
+        try:
+            engine = await get_vllm_engine_info(server_url)
+            if engine:
+                infra["serving_engine"] = engine
+        except Exception as e:
+            print(f"[BenchmarkService] Failed to collect serving engine info: {e}")
+
+        # Return infra if we collected at least some info
+        return infra if len(infra) > 1 else None
 
     def get_status(self, run_id: str) -> Optional[dict]:
         """Get benchmark run status."""

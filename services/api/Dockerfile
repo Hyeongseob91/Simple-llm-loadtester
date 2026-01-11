@@ -12,7 +12,9 @@ RUN pip install --no-cache-dir \
     openpyxl>=3.1.0 \
     websockets>=12.0 \
     tiktoken>=0.5.0 \
-    structlog>=23.0.0
+    structlog>=23.0.0 \
+    psutil>=5.9.0 \
+    nvidia-ml-py>=12.0.0
 
 # Copy source
 COPY shared/core/ /app/shared/core/

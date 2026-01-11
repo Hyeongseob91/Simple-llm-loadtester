@@ -123,10 +123,15 @@ class BenchmarkResult(BaseModel):
     adapter: str = Field(default="openai", description="Adapter type")
     config: BenchmarkConfig = Field(description="Benchmark configuration")
     results: list[ConcurrencyResult] = Field(description="Results per concurrency level")
-    gpu_metrics: Optional[GPUMetrics] = Field(default=None, description="GPU metrics")
+    gpu_metrics: Optional[GPUMetrics] = Field(default=None, description="GPU metrics (deprecated)")
     started_at: datetime = Field(description="Start timestamp")
     completed_at: datetime = Field(description="Completion timestamp")
     duration_seconds: float = Field(description="Total duration in seconds")
+
+    # Server infrastructure info (for AI analysis)
+    server_infra: Optional["ServerInfraInfo"] = Field(
+        default=None, description="Server infrastructure captured at benchmark start"
+    )
 
     def get_summary(self) -> dict:
         """Get summary of best results across concurrency levels."""
@@ -240,3 +245,81 @@ class InfraRecommendation(BaseModel):
     estimated_monthly_cost_usd: Optional[float] = Field(
         default=None, description="Estimated monthly cloud cost (USD)"
     )
+
+
+# ============================================================
+# Server Infrastructure Models (for AI Analysis)
+# ============================================================
+
+
+class SystemInfo(BaseModel):
+    """System hardware information (CPU, RAM)."""
+
+    cpu_model: str = Field(description="CPU model name")
+    cpu_cores_physical: int = Field(description="Physical CPU cores")
+    cpu_cores_logical: int = Field(description="Logical CPU cores (with HT)")
+    cpu_frequency_mhz: Optional[float] = Field(default=None, description="CPU frequency in MHz")
+    numa_nodes: int = Field(default=1, description="Number of NUMA nodes")
+    ram_total_gb: float = Field(description="Total RAM in GB")
+    ram_available_gb: Optional[float] = Field(default=None, description="Available RAM in GB")
+
+
+class GPUStaticInfo(BaseModel):
+    """Static GPU hardware information (captured at benchmark start)."""
+
+    gpu_count: int = Field(description="Number of GPUs")
+    gpu_model: str = Field(description="GPU model name (e.g., NVIDIA H100)")
+    gpu_memory_total_gb: float = Field(description="Total VRAM per GPU in GB")
+    driver_version: Optional[str] = Field(default=None, description="NVIDIA driver version")
+    cuda_version: Optional[str] = Field(default=None, description="CUDA version")
+    mig_enabled: Optional[bool] = Field(default=None, description="MIG mode enabled")
+    gpu_details: Optional[list[dict]] = Field(
+        default=None, description="Per-GPU details for multi-GPU systems"
+    )
+
+
+class ServingEngineInfo(BaseModel):
+    """Serving engine configuration (vLLM, TGI, etc.)."""
+
+    engine_type: str = Field(default="unknown", description="Engine type (vLLM/TGI/TensorRT-LLM)")
+    engine_version: Optional[str] = Field(default=None, description="Engine version")
+    model_name: Optional[str] = Field(default=None, description="Loaded model name")
+    quantization: Optional[str] = Field(default=None, description="Quantization method (AWQ/GPTQ/FP16)")
+    context_length: Optional[int] = Field(default=None, description="Max context length")
+    max_num_seqs: Optional[int] = Field(default=None, description="Max concurrent sequences (vLLM)")
+    max_num_batched_tokens: Optional[int] = Field(
+        default=None, description="Max batched tokens (vLLM)"
+    )
+    gpu_memory_utilization: Optional[float] = Field(
+        default=None, description="GPU memory utilization setting (vLLM)"
+    )
+    tensor_parallel_size: Optional[int] = Field(default=None, description="Tensor parallelism size")
+
+
+class GPUMetricsDuringBenchmark(BaseModel):
+    """GPU metrics captured during benchmark execution."""
+
+    gpu_index: int = Field(description="GPU index")
+    device_name: Optional[str] = Field(default=None, description="GPU device name")
+    avg_memory_used_gb: float = Field(description="Average memory used in GB")
+    peak_memory_used_gb: float = Field(description="Peak memory used in GB")
+    avg_gpu_util_percent: float = Field(description="Average GPU utilization %")
+    peak_gpu_util_percent: float = Field(description="Peak GPU utilization %")
+    avg_temperature_celsius: Optional[float] = Field(default=None, description="Average temperature")
+    peak_temperature_celsius: Optional[float] = Field(default=None, description="Peak temperature")
+    avg_power_draw_watts: Optional[float] = Field(default=None, description="Average power draw")
+    peak_power_draw_watts: Optional[float] = Field(default=None, description="Peak power draw")
+
+
+class ServerInfraInfo(BaseModel):
+    """Complete server infrastructure information for AI analysis."""
+
+    system: Optional[SystemInfo] = Field(default=None, description="System hardware info")
+    gpu: Optional[GPUStaticInfo] = Field(default=None, description="GPU hardware info")
+    serving_engine: Optional[ServingEngineInfo] = Field(
+        default=None, description="Serving engine configuration"
+    )
+    gpu_metrics_during_benchmark: Optional[list[GPUMetricsDuringBenchmark]] = Field(
+        default=None, description="GPU metrics captured during benchmark"
+    )
+    captured_at: Optional[datetime] = Field(default=None, description="Capture timestamp")

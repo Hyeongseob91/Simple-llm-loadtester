@@ -428,3 +428,122 @@ def get_gpu_info() -> GPUMonitorResult:
         except Exception:
             pass
         return GPUMonitorResult(available=False, error=str(e))
+
+
+def get_gpu_static_info() -> Optional[dict]:
+    """Get static GPU hardware information (driver, CUDA version, etc).
+
+    Unlike get_gpu_info(), this focuses on hardware specs, not current utilization.
+    Used for server infrastructure context in AI analysis reports.
+
+    Returns:
+        Dictionary with static GPU info or None if unavailable.
+
+    Example:
+        >>> info = get_gpu_static_info()
+        >>> print(info)
+        {
+            'gpu_count': 2,
+            'gpu_model': 'NVIDIA H100 80GB HBM3',
+            'gpu_memory_total_gb': 80.0,
+            'driver_version': '535.104.05',
+            'cuda_version': '12.2',
+            'mig_enabled': False,
+            'gpu_details': [
+                {'index': 0, 'name': 'NVIDIA H100 80GB HBM3', 'memory_total_gb': 80.0},
+                {'index': 1, 'name': 'NVIDIA H100 80GB HBM3', 'memory_total_gb': 80.0}
+            ]
+        }
+    """
+    pynvml = _get_pynvml()
+    if not pynvml:
+        return None
+
+    try:
+        pynvml.nvmlInit()
+        gpu_count = pynvml.nvmlDeviceGetCount()
+
+        if gpu_count == 0:
+            pynvml.nvmlShutdown()
+            return None
+
+        # Get driver version
+        try:
+            driver_version = pynvml.nvmlSystemGetDriverVersion()
+            if isinstance(driver_version, bytes):
+                driver_version = driver_version.decode("utf-8")
+        except Exception:
+            driver_version = None
+
+        # Get CUDA version
+        try:
+            cuda_version_int = pynvml.nvmlSystemGetCudaDriverVersion_v2()
+            cuda_major = cuda_version_int // 1000
+            cuda_minor = (cuda_version_int % 1000) // 10
+            cuda_version = f"{cuda_major}.{cuda_minor}"
+        except Exception:
+            cuda_version = None
+
+        # Get first GPU details (assume homogeneous cluster)
+        handle = pynvml.nvmlDeviceGetHandleByIndex(0)
+
+        # Device name
+        try:
+            device_name = pynvml.nvmlDeviceGetName(handle)
+            if isinstance(device_name, bytes):
+                device_name = device_name.decode("utf-8")
+        except Exception:
+            device_name = "Unknown GPU"
+
+        # Memory
+        try:
+            mem = pynvml.nvmlDeviceGetMemoryInfo(handle)
+            memory_total_gb = round(mem.total / (1024**3), 2)
+        except Exception:
+            memory_total_gb = 0.0
+
+        # Check MIG mode
+        mig_enabled = False
+        try:
+            mig_mode, _ = pynvml.nvmlDeviceGetMigMode(handle)
+            mig_enabled = mig_mode == pynvml.NVML_DEVICE_MIG_ENABLE
+        except Exception:
+            # MIG not supported on this GPU
+            pass
+
+        # Collect all GPU details for multi-GPU systems
+        gpu_details = []
+        for idx in range(gpu_count):
+            try:
+                h = pynvml.nvmlDeviceGetHandleByIndex(idx)
+                name = pynvml.nvmlDeviceGetName(h)
+                if isinstance(name, bytes):
+                    name = name.decode("utf-8")
+                m = pynvml.nvmlDeviceGetMemoryInfo(h)
+                gpu_details.append({
+                    "index": idx,
+                    "name": name,
+                    "memory_total_gb": round(m.total / (1024**3), 2),
+                })
+            except Exception:
+                gpu_details.append({"index": idx, "name": f"GPU {idx}", "memory_total_gb": 0.0})
+
+        pynvml.nvmlShutdown()
+
+        return {
+            "gpu_count": gpu_count,
+            "gpu_model": device_name,
+            "gpu_memory_total_gb": memory_total_gb,
+            "driver_version": driver_version,
+            "cuda_version": cuda_version,
+            "mig_enabled": mig_enabled,
+            "gpu_details": gpu_details,
+        }
+
+    except Exception as e:
+        logger.warning(f"Failed to collect GPU static info: {e}")
+        try:
+            pynvml.nvmlShutdown()
+        except Exception:
+            pass
+        return None

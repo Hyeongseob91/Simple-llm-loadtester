@@ -14,6 +14,35 @@ class GoodputThresholdsSchema(BaseModel):
     e2e_ms: Optional[float] = Field(default=None, description="E2E threshold (ms)")
 
 
+class VLLMConfigInput(BaseModel):
+    """User-provided vLLM configuration for analysis accuracy.
+
+    These values cannot be auto-detected from vLLM API, so users can
+    optionally provide them to improve AI analysis accuracy.
+    """
+
+    gpu_memory_utilization: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="GPU memory allocation ratio (0.0~1.0). vLLM default: 0.9"
+    )
+    tensor_parallel_size: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Number of GPUs for tensor parallelism. vLLM default: 1"
+    )
+    max_num_seqs: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="Maximum concurrent sequences. vLLM default: 256"
+    )
+    quantization: Optional[str] = Field(
+        default=None,
+        description="Quantization method (e.g., awq, gptq, fp8, None)"
+    )
+
+
 class BenchmarkRequest(BaseModel):
     """Request to start a benchmark."""
 
@@ -31,6 +60,10 @@ class BenchmarkRequest(BaseModel):
     duration_seconds: Optional[int] = Field(default=None, description="Duration mode")
     goodput_thresholds: Optional[GoodputThresholdsSchema] = Field(
         default=None, description="Goodput SLO thresholds"
+    )
+    vllm_config: Optional[VLLMConfigInput] = Field(
+        default=None,
+        description="Optional vLLM configuration for improved analysis accuracy"
     )
 
 
