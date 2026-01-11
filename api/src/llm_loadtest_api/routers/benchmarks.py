@@ -25,6 +25,14 @@ from llm_loadtest_api.models.schemas import (
 )
 from llm_loadtest_api import __version__
 
+# GPU 모니터링
+try:
+    from core.gpu_monitor import get_gpu_info
+    GPU_AVAILABLE = True
+except ImportError:
+    GPU_AVAILABLE = False
+    get_gpu_info = None
+
 # Logger
 logger = get_logger(__name__)
 
@@ -613,6 +621,28 @@ def _build_analysis_prompt(result: dict) -> str:
     duration = result.get("duration_seconds", 0)
     results = result.get("results", [])
 
+    # GPU 인프라 정보 수집
+    gpu_info_section = ""
+    if GPU_AVAILABLE and get_gpu_info:
+        try:
+            gpu_result = get_gpu_info()
+            if gpu_result.available and gpu_result.metrics:
+                gpu_lines = []
+                for gpu in gpu_result.metrics:
+                    gpu_lines.append(
+                        f"  - **GPU {gpu.gpu_index}**: {gpu.device_name} "
+                        f"({gpu.memory_total_gb:.1f}GB VRAM, "
+                        f"현재 {gpu.memory_used_gb:.1f}GB 사용 중)"
+                    )
+                gpu_info_section = f"""
+## 서버 인프라 (자동 감지)
+- **GPU 수**: {gpu_result.gpu_count}장
+{"".join(f'{line}\n' for line in gpu_lines)}
+> 위 인프라 환경을 고려하여 분석해주세요. 특히 GPU 메모리와 처리량 간의 관계를 분석하세요.
+"""
+        except Exception as e:
+            logger.warning(f"GPU 정보 수집 실패: {e}")
+
     # 테이블 데이터에서 직접 요약 통계 계산 (summary 필드가 없거나 0인 경우 대비)
     best_throughput = 0.0
     best_ttft_p50 = float('inf')
@@ -665,7 +695,7 @@ def _build_analysis_prompt(result: dict) -> str:
 - **모델**: {model}
 - **서버**: {server_url}
 - **테스트 시간**: {duration:.1f}초
-
+{gpu_info_section}
 ## 성능 요약 (테이블 기반 계산)
 - **최고 처리량**: {best_throughput:.1f} tok/s (동시성 {concurrency_summary}에서)
 - **최저 TTFT p50**: {best_ttft_p50:.1f} ms

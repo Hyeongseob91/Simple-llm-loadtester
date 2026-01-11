@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { ArrowLeft, Loader2, AlertCircle, RefreshCw, Sparkles } from "lucide-react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 export default function AnalysisPage() {
   const params = useParams();
@@ -246,7 +247,40 @@ export default function AnalysisPage() {
             </div>
           ) : analysis ? (
             <div className="prose prose-gray dark:prose-invert max-w-none">
-              <ReactMarkdown>{analysis}</ReactMarkdown>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                components={{
+                  // GFM 테이블 스타일링
+                  table: ({ children }) => (
+                    <div className="overflow-x-auto my-4">
+                      <table className="min-w-full border-collapse border border-gray-300 dark:border-gray-600 text-sm">
+                        {children}
+                      </table>
+                    </div>
+                  ),
+                  thead: ({ children }) => (
+                    <thead className="bg-gray-100 dark:bg-gray-700">{children}</thead>
+                  ),
+                  tbody: ({ children }) => (
+                    <tbody className="divide-y divide-gray-200 dark:divide-gray-600">{children}</tbody>
+                  ),
+                  tr: ({ children }) => (
+                    <tr className="hover:bg-gray-50 dark:hover:bg-gray-700/50">{children}</tr>
+                  ),
+                  th: ({ children }) => (
+                    <th className="border border-gray-300 dark:border-gray-600 px-3 py-2 text-left font-semibold text-gray-900 dark:text-gray-100">
+                      {children}
+                    </th>
+                  ),
+                  td: ({ children }) => (
+                    <td className="border border-gray-300 dark:border-gray-600 px-3 py-2 text-gray-700 dark:text-gray-300">
+                      {children}
+                    </td>
+                  ),
+                }}
+              >
+                {analysis}
+              </ReactMarkdown>
               {isGenerating && (
                 <span className="inline-block w-2 h-5 bg-blue-600 animate-pulse ml-1" />
               )}
