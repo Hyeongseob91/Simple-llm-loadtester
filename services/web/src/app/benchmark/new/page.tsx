@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { api, BenchmarkConfig, VLLMConfig } from "@/lib/api";
+import { api, BenchmarkConfig, VLLMConfig, ValidationConfig } from "@/lib/api";
 
 type PresetType = "quick" | "standard" | "stress";
 
@@ -34,7 +34,7 @@ const PRESETS = {
 export default function NewBenchmarkPage() {
   const router = useRouter();
   const [config, setConfig] = useState<Partial<BenchmarkConfig>>({
-    server_url: "http://host.docker.internal:8000",
+    server_url: "",
     model: "",
     adapter: "openai",
     concurrency: [1, 10, 50],
@@ -55,6 +55,11 @@ export default function NewBenchmarkPage() {
     tensor_parallel_size: 1,
     max_num_seqs: 256,
     quantization: "",
+  });
+  const [validationEnabled, setValidationEnabled] = useState(false);
+  const [validationConfig, setValidationConfig] = useState({
+    container_name: "",
+    tolerance: 0.05,
   });
 
   const applyPreset = (preset: PresetType) => {
@@ -118,6 +123,14 @@ export default function NewBenchmarkPage() {
       if (Object.keys(vllmConfigToSend).length > 0) {
         finalConfig.vllm_config = vllmConfigToSend;
       }
+    }
+
+    if (validationEnabled) {
+      finalConfig.validation_config = {
+        enabled: true,
+        container_name: validationConfig.container_name || undefined,
+        tolerance: validationConfig.tolerance,
+      };
     }
 
     mutation.mutate(finalConfig);
@@ -244,7 +257,7 @@ export default function NewBenchmarkPage() {
                     setConfig({ ...config, server_url: e.target.value })
                   }
                   className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                  placeholder="http://host.docker.internal:8000"
+                  placeholder="http://your-vllm-server:8000"
                   required
                 />
                 <div className="grid grid-cols-2 gap-2">
@@ -567,6 +580,87 @@ export default function NewBenchmarkPage() {
             </div>
             <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600 text-gray-400">
               예: 통화 AI 상담 시스템에서 1초 내 응답 목표 시 TTFT=500ms, TPOT=100ms, E2E=10000ms 권장
+            </div>
+          </div>
+        </div>
+
+        {/* Validation Section */}
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Server Validation
+          </h2>
+          <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700"></div>
+          <span className="text-xs text-gray-500 dark:text-gray-400">선택사항 (결과 검증)</span>
+        </div>
+
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+          <div className="flex items-start gap-6 mb-4">
+            {/* Enable Toggle */}
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={validationEnabled}
+                onChange={(e) => setValidationEnabled(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300"
+              />
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                서버 메트릭 검증 활성화
+              </span>
+            </label>
+          </div>
+
+          {/* Validation Config Inputs */}
+          <div className={`grid grid-cols-2 gap-4 mb-4 ${!validationEnabled && "opacity-50 pointer-events-none"}`}>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                Docker Container Name
+              </label>
+              <input
+                type="text"
+                value={validationConfig.container_name}
+                onChange={(e) =>
+                  setValidationConfig({ ...validationConfig, container_name: e.target.value })
+                }
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                placeholder="자동 감지 (비워두면 포트 기반 감지)"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+                Tolerance (%)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                max="1"
+                value={validationConfig.tolerance}
+                onChange={(e) =>
+                  setValidationConfig({ ...validationConfig, tolerance: parseFloat(e.target.value) || 0.05 })
+                }
+                className="w-full px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                placeholder="0.05"
+              />
+            </div>
+          </div>
+
+          {/* Help Text */}
+          <div className="text-xs text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3">
+            <div className="font-medium text-gray-700 dark:text-gray-300 mb-2">
+              서버 메트릭 검증 (클라이언트 측정값 vs 서버 실제값 비교)
+            </div>
+            <div className="grid grid-cols-1 gap-1.5">
+              <div className="flex items-start gap-2">
+                <span className="font-semibold text-blue-600 dark:text-blue-400 min-w-[120px]">Prometheus 검증</span>
+                <span>vLLM /metrics 엔드포인트에서 요청 수, TTFT, 토큰 수 비교</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="font-semibold text-green-600 dark:text-green-400 min-w-[120px]">Docker 로그 검증</span>
+                <span>컨테이너 로그에서 HTTP 200 카운트, throughput, 에러 감지</span>
+              </div>
+            </div>
+            <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600 text-gray-400">
+              네트워크 손실이나 측정 오류를 감지하여 테스트 결과의 신뢰성을 검증합니다.
             </div>
           </div>
         </div>

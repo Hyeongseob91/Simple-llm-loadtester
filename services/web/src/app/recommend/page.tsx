@@ -27,7 +27,7 @@ export default function RecommendPage() {
   const [result, setResult] = useState<RecommendResponse | null>(null);
 
   const [config, setConfig] = useState({
-    server_url: "http://localhost:8000",
+    server_url: "",
     model: "",
     adapter: "openai",
     peak_concurrency: 500,
@@ -401,7 +401,7 @@ export default function RecommendPage() {
                 value={config.server_url}
                 onChange={(e) => setConfig({ ...config, server_url: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
-                placeholder="http://localhost:8000"
+                placeholder="http://your-vllm-server:8000"
                 required
               />
             </div>

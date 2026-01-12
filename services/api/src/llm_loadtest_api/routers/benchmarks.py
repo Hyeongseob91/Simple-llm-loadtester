@@ -48,7 +48,9 @@ def get_db() -> Database:
     """Get database instance."""
     global _db
     if _db is None:
-        _db = Database()
+        import os
+        db_path = os.environ.get("DATABASE_PATH", "benchmarks.db")
+        _db = Database(db_path)
     return _db
 
 
@@ -482,7 +484,7 @@ def _export_to_xlsx(result: dict) -> bytes:
 @router.get("/result/{run_id}/analysis")
 async def analyze_result(
     run_id: str,
-    server_url: str = Query(default="http://host.docker.internal:8000", description="vLLM server URL"),
+    server_url: str = Query(default="", description="vLLM server URL"),
     model: str = Query(default="", description="Model name (uses benchmark model if empty)"),
     service: BenchmarkService = Depends(get_service),
 ) -> StreamingResponse:
@@ -529,6 +531,9 @@ async def analyze_result(
 - 핵심부터 설명, 불필요한 서론 생략"""
 
         try:
+            # vLLM 연결 전에 thinking 상태 전송 (Thinking 모델은 첫 응답까지 오래 걸림)
+            yield f"data: {json.dumps({'thinking': True})}\n\n"
+
             async with httpx.AsyncClient(timeout=httpx.Timeout(300.0, read=300.0)) as client:
                 async with client.stream(
                     "POST",
@@ -556,8 +561,7 @@ async def analyze_result(
                         yield f"data: {json.dumps({'error': f'vLLM error: {error_text.decode()}'})}\n\n"
                         return
 
-                    # Thinking 모델 대응: </think> 태그가 나오면 그 이후만 출력
-                    # Qwen3-VL 특성: <think> 시작 없이 thinking 시작, </think>로 종료
+                    # Thinking 모델 대응: thinking 상태를 실시간으로 전송
                     buffer = ""
                     report_started = False
                     think_end_tag = "</think>"
@@ -581,20 +585,23 @@ async def analyze_result(
                                     else:
                                         # 버퍼에 축적
                                         buffer += content
+
+                                        # /no_think이 작동하면 바로 마크다운으로 시작
+                                        if buffer.lstrip().startswith("#") and len(buffer) > 50:
+                                            report_started = True
+                                            # thinking 종료 알림
+                                            yield f"data: {json.dumps({'thinking': False})}\n\n"
+                                            yield f"data: {json.dumps({'content': buffer.lstrip()})}\n\n"
+                                            buffer = ""
                                         # </think> 태그가 나오면 보고서 시작
-                                        if think_end_tag in buffer:
-                                            # </think> 이후 내용만 추출
+                                        elif think_end_tag in buffer:
                                             idx = buffer.find(think_end_tag)
                                             remaining = buffer[idx + len(think_end_tag):].lstrip()
                                             report_started = True
+                                            # thinking 종료 알림
+                                            yield f"data: {json.dumps({'thinking': False})}\n\n"
                                             if remaining:
                                                 yield f"data: {json.dumps({'content': remaining})}\n\n"
-                                            buffer = ""
-                                        # /no_think이 작동하면 바로 마크다운으로 시작할 수 있음
-                                        elif buffer.lstrip().startswith("#") and len(buffer) > 50:
-                                            # thinking 없이 바로 보고서 시작
-                                            report_started = True
-                                            yield f"data: {json.dumps({'content': buffer.lstrip()})}\n\n"
                                             buffer = ""
                             except json.JSONDecodeError:
                                 continue

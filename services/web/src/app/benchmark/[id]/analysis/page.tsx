@@ -4,7 +4,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useState, useEffect, useRef } from "react";
 import { api } from "@/lib/api";
-import { ArrowLeft, Loader2, AlertCircle, RefreshCw, Sparkles } from "lucide-react";
+import { ArrowLeft, Loader2, AlertCircle, RefreshCw, Sparkles, Download } from "lucide-react";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -16,6 +16,7 @@ export default function AnalysisPage() {
 
   const [analysis, setAnalysis] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isThinking, setIsThinking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasStarted, setHasStarted] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -39,14 +40,32 @@ export default function AnalysisPage() {
     }
   }, [analysis, isGenerating]);
 
+  // 분석 결과 다운로드
+  const downloadAnalysis = () => {
+    const modelName = status?.model?.replace(/[/\\:*?"<>|]/g, "-") || "unknown";
+    const dateStr = new Date().toISOString().split("T")[0];
+    const filename = `analysis_${modelName}_${dateStr}.md`;
+
+    const blob = new Blob([analysis], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+
+    URL.revokeObjectURL(url);
+  };
+
   const startAnalysis = async () => {
     setIsGenerating(true);
+    setIsThinking(false);
     setError(null);
     setAnalysis("");
     setHasStarted(true);
 
     try {
-      const serverUrl = status?.server_url || "http://host.docker.internal:8000";
+      const serverUrl = status?.server_url || "";
       const model = status?.model || "";
 
       const response = await fetch(
@@ -80,6 +99,10 @@ export default function AnalysisPage() {
             }
             try {
               const parsed = JSON.parse(data);
+              // Thinking 상태 처리
+              if (parsed.thinking !== undefined) {
+                setIsThinking(parsed.thinking);
+              }
               if (parsed.content) {
                 setAnalysis((prev) => prev + parsed.content);
               }
@@ -146,32 +169,44 @@ export default function AnalysisPage() {
             </p>
           </div>
         </div>
-        <button
-          onClick={startAnalysis}
-          disabled={isGenerating}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-            isGenerating
-              ? "bg-gray-100 text-gray-400 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500"
-              : "bg-blue-600 text-white hover:bg-blue-700"
-          }`}
-        >
-          {isGenerating ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              분석 생성 중...
-            </>
-          ) : hasStarted ? (
-            <>
-              <RefreshCw className="h-4 w-4" />
-              다시 분석
-            </>
-          ) : (
-            <>
-              <Sparkles className="h-4 w-4" />
-              분석 시작
-            </>
+        <div className="flex items-center gap-2">
+          {/* Download 버튼 - 분석 완료 후에만 표시 */}
+          {!isGenerating && analysis && (
+            <button
+              onClick={downloadAnalysis}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <Download className="h-4 w-4" />
+              Download
+            </button>
           )}
-        </button>
+          <button
+            onClick={startAnalysis}
+            disabled={isGenerating}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+              isGenerating
+                ? "bg-gray-100 text-gray-400 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500"
+                : "bg-blue-600 text-white hover:bg-blue-700"
+            }`}
+          >
+            {isGenerating ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                분석 생성 중...
+              </>
+            ) : hasStarted ? (
+              <>
+                <RefreshCw className="h-4 w-4" />
+                다시 분석
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4" />
+                분석 시작
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Result Summary Card */}
@@ -217,9 +252,13 @@ export default function AnalysisPage() {
             AI 분석 결과
           </h2>
           {isGenerating && (
-            <span className="text-xs text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 px-2 py-1 rounded flex items-center gap-1">
+            <span className={`text-xs px-2 py-1 rounded flex items-center gap-1 ${
+              isThinking
+                ? "text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30"
+                : "text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30"
+            }`}>
               <Loader2 className="h-3 w-3 animate-spin" />
-              vLLM 생성 중
+              {isThinking ? "AI 분석 중..." : "보고서 작성 중"}
             </span>
           )}
         </div>
@@ -287,10 +326,30 @@ export default function AnalysisPage() {
             </div>
           ) : isGenerating ? (
             <div className="text-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-4" />
-              <p className="text-gray-600 dark:text-gray-400">
-                vLLM에서 분석을 생성하고 있습니다...
-              </p>
+              {isThinking ? (
+                <>
+                  <div className="relative mx-auto mb-4 w-16 h-16">
+                    <div className="absolute inset-0 rounded-full border-4 border-amber-200 dark:border-amber-800"></div>
+                    <div className="absolute inset-0 rounded-full border-4 border-amber-500 border-t-transparent animate-spin"></div>
+                    <span className="absolute inset-0 flex items-center justify-center text-2xl">
+                      🤔
+                    </span>
+                  </div>
+                  <p className="text-amber-600 dark:text-amber-400 font-medium">
+                    AI가 벤치마크 결과를 분석하고 있습니다...
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                    Thinking 모델이 깊이 있는 분석을 수행 중입니다
+                  </p>
+                </>
+              ) : (
+                <>
+                  <Loader2 className="h-8 w-8 animate-spin text-blue-600 mx-auto mb-4" />
+                  <p className="text-gray-600 dark:text-gray-400">
+                    vLLM에서 분석을 생성하고 있습니다...
+                  </p>
+                </>
+              )}
             </div>
           ) : null}
         </div>

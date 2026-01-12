@@ -59,6 +59,9 @@ next-env.d.ts
 .env.test.local
 .env.production.local
 
+# Docker local overrides
+docker-compose.override.yml
+
 # Logs
 *.log
 npm-debug.log*
