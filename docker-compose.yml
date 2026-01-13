@@ -11,9 +11,8 @@ services:
     environment:
       - DATABASE_PATH=/data/benchmarks.db
       - PORT=8085
-    # extra_hosts는 docker-compose.override.yml에서 설정
-    # 예: extra_hosts:
-    #       - "host.docker.internal:host-gateway"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8085/health')"]
@@ -39,6 +38,8 @@ services:
       - API_URL=http://api:8085
     depends_on:
       - api
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:5050"]
