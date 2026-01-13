@@ -12,7 +12,6 @@ import remarkGfm from "remark-gfm";
 const languageOptions = [
   { value: "ko", label: "한국어" },
   { value: "en", label: "English" },
-  { value: "zh", label: "中文" },
 ];
 
 export default function AnalysisPage() {
