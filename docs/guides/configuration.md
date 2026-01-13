@@ -23,7 +23,7 @@ docker compose up -d
 API_KEY=your-secret-key docker compose up -d
 
 # API 호출 시 헤더 추가
-curl -X POST http://localhost:8085/api/v1/benchmark/run \
+curl -X POST http://<your-host>:8085/api/v1/benchmark/run \
   -H "X-API-Key: your-secret-key" \
   -H "Content-Type: application/json" \
   -d '{"server_url": "...", "model": "..."}'
@@ -80,6 +80,5 @@ services:
 | **vLLM** | openai | ✅ 지원 | OpenAI-compatible API |
 | **SGLang** | openai | ✅ 지원 | OpenAI-compatible API |
 | **Ollama** | openai | ✅ 지원 | OpenAI-compatible API |
-| **LMDeploy** | openai | ✅ 지원 | OpenAI-compatible API |
 | **Triton** | triton | 🚧 개발 중 | Triton HTTP API |
 | **TensorRT-LLM** | trtllm | 📋 예정 | - |

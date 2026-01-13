@@ -17,8 +17,8 @@ pip install -e .
 
 ```bash
 llm-loadtest run \
-  --server http://localhost:8000 \    # 필수: 서버 URL
-  --model qwen3-14b \                  # 필수: 모델명
+  --server http://<your-llm-server> \    # 필수: 서버 URL
+  --model <your-model> \                  # 필수: 모델명
   --concurrency 1,10,50,100 \          # 동시성 레벨 (쉼표 구분)
   --num-prompts 100 \                  # 요청 수 (--duration과 택일)
   --duration 60 \                      # 기간 기반 모드 (초)
@@ -58,22 +58,22 @@ llm-loadtest run \
 ```bash
 # 기본 부하 테스트
 llm-loadtest run \
-  --server http://localhost:8000 \
-  --model qwen3-14b \
+  --server http://<your-llm-server> \
+  --model <your-model> \
   --concurrency 1,10,50 \
   --num-prompts 100
 
 # Goodput 측정 (SLO 기반)
 llm-loadtest run \
-  --server http://localhost:8000 \
-  --model qwen3-14b \
+  --server http://<your-llm-server> \
+  --model <your-model> \
   --concurrency 50 \
   --goodput ttft:500,tpot:50
 
 # 결과 JSON 저장
 llm-loadtest run \
-  --server http://localhost:8000 \
-  --model qwen3-14b \
+  --server http://<your-llm-server> \
+  --model <your-model> \
   --output result.json
 ```
 
@@ -85,8 +85,8 @@ GPU 인프라 추천
 
 ```bash
 llm-loadtest recommend \
-  --server http://localhost:8000 \    # 필수: 서버 URL
-  --model qwen3-14b \                  # 필수: 모델명
+  --server http://<your-llm-server> \    # 필수: 서버 URL
+  --model <your-model> \                  # 필수: 모델명
   --peak-concurrency 500 \             # 필수: 목표 피크 동시성
   --ttft-target 500 \                  # TTFT 목표 (ms)
   --tpot-target 50 \                   # TPOT 목표 (ms)
@@ -180,8 +180,8 @@ llm-loadtest gpu
 
 ```bash
 # OpenAI-compatible (기본값) - vLLM, SGLang, Ollama
-llm-loadtest run --adapter openai --server http://localhost:8000 ...
+llm-loadtest run --adapter openai --server http://<your-llm-server> ...
 
 # Triton Inference Server
-llm-loadtest run --adapter triton --server http://localhost:8000 ...
+llm-loadtest run --adapter triton --server http://<your-llm-server> ...
 ```

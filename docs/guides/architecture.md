@@ -44,7 +44,7 @@
                   │
 ┌─────────────────▼───────────────────────────────────────────┐
 │                    LLM Serving Server                        │
-│           vLLM / SGLang / Ollama / LMDeploy / Triton        │
+│              vLLM / SGLang / Ollama / Triton                │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -114,8 +114,7 @@ llm-loadtest/
 │   └── integration/           # 통합 테스트
 │
 ├── docs/                      # 문서
-│   ├── guides/                # 사용 가이드
-│   └── prd/                   # PRD 문서
+│   └── guides/                # 사용 가이드
 │
 ├── .claude/                   # Claude Code 설정
 ├── docker-compose.yml         # 오케스트레이션

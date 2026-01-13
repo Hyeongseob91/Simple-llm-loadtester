@@ -2,7 +2,7 @@
 
 > LLM Loadtest REST API 레퍼런스
 
-**Base URL**: `http://localhost:8085`
+**Base URL**: `http://<your-host>:8085`
 
 ---
 
@@ -38,8 +38,8 @@
 **요청 본문**:
 ```json
 {
-  "server_url": "http://localhost:8000",
-  "model": "qwen3-14b",
+  "server_url": "http://<your-llm-server>",
+  "model": "<your-model>",
   "adapter": "openai",
   "concurrency": [1, 10, 50],
   "num_prompts": 100,
@@ -99,8 +99,8 @@
 **요청 본문**:
 ```json
 {
-  "server_url": "http://localhost:8000",
-  "model": "qwen3-14b",
+  "server_url": "http://<your-llm-server>",
+  "model": "<your-model>",
   "adapter": "openai",
   "workload": {
     "peak_concurrency": 500,
