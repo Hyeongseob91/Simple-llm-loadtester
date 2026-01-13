@@ -1,4 +1,4 @@
-# LLM Loadtest
+# Simple LLM Loadtester
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/downloads/)
@@ -200,7 +200,6 @@ Goodput = (TTFT ≤ 500ms AND TPOT ≤ 50ms AND E2E ≤ 5000ms인 요청 수) / 
 | vLLM | openai | ✅ 지원 |
 | SGLang | openai | ✅ 지원 |
 | Ollama | openai | ✅ 지원 |
-| LMDeploy | openai | ✅ 지원 |
 | Triton | triton | 🚧 개발 중 |
 
 OpenAI-compatible API (`/v1/chat/completions`)를 제공하는 서버라면 대부분 지원됩니다.

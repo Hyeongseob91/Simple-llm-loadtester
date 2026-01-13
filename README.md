@@ -1,4 +1,4 @@
-# LLM Loadtest
+# Simple LLM Loadtester
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/downloads/)
@@ -200,7 +200,6 @@ Each metric provides the following statistics:
 | vLLM | openai | ✅ Supported |
 | SGLang | openai | ✅ Supported |
 | Ollama | openai | ✅ Supported |
-| LMDeploy | openai | ✅ Supported |
 | Triton | triton | 🚧 In Development |
 
 Any server providing OpenAI-compatible API (`/v1/chat/completions`) is generally supported.
